@@ -37,6 +37,7 @@ import org.json.JSONObject;
 
 public class Main extends Activity {
     private WifiScanReceiver wifiReciever;
+    private IntentFilter scanCompleteFilter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,7 +50,7 @@ public class Main extends Activity {
         }
 
         wifiReciever = new WifiScanReceiver();
-        registerReceiver(wifiReciever, new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
+        scanCompleteFilter = new IntentFilter(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
     }
 
     @Override
@@ -88,98 +89,84 @@ public class Main extends Activity {
     }
 
     public void makeSniff(View view) {
+        registerReceiver(wifiReciever, scanCompleteFilter);
+
+        Toast.makeText(getApplicationContext(), "Start scan...", Toast.LENGTH_SHORT).show();
         WifiManager manager = (WifiManager) this.getSystemService(Context.WIFI_SERVICE);
-        WifiInfo info = manager.getConnectionInfo();
         manager.startScan();
-        System.out.println("Start Scan");
     }
 
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        unregisterReceiver(wifiReciever);
-    }
-}
+    class WifiScanReceiver extends BroadcastReceiver {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            Toast.makeText(getApplicationContext(), "Scan finished", Toast.LENGTH_SHORT).show();
+            WifiManager manager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+            JSONObject json = new JSONObject();
+            JSONArray scan = new JSONArray();
+            for(ScanResult result: manager.getScanResults()){
+                JSONObject thisResult = new JSONObject();
+                try{
+                    thisResult.put("BSSID", result.BSSID);
+                    thisResult.put("SSID", result.SSID);
+                    thisResult.put("capabilities", result.capabilities);
+                    thisResult.put("frequency", result.frequency);
+                    thisResult.put("level", result.level);
+                    thisResult.put("lastseen", result.timestamp / 1000);
+                    scan.put(thisResult);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
 
-class WifiScanReceiver extends BroadcastReceiver {
-    @Override
-    public void onReceive(Context context, Intent intent) {
-        System.out.println("Scan finished");
-        WifiManager manager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
-        JSONObject json = new JSONObject();
-        JSONArray scan = new JSONArray();
-        for(ScanResult result: manager.getScanResults()){
-            JSONObject thisResult = new JSONObject();
             try{
-                thisResult.put("BSSID", result.BSSID);
-                thisResult.put("SSID", result.SSID);
-                thisResult.put("capabilities", result.capabilities);
-                thisResult.put("frequency", result.frequency);
-                thisResult.put("level", result.level);
-                thisResult.put("lastseen", result.timestamp / 1000);
-                scan.put(thisResult);
+                json.put("scan", scan);
+                json.put("timestamp", System.currentTimeMillis() / 1000);
             } catch (JSONException e) {
                 e.printStackTrace();
             }
+
+            //TextView sniffResult = (TextView) findViewById(R.id.textView);
+            //sniffResult.setText(jsonString);
+
+            new PostAsync().execute(json.toString());
         }
-
-        try{
-            json.put("scan", scan);
-            json.put("timestamp", System.currentTimeMillis() / 1000);
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        final String jsonString = json.toString();
-        System.out.println(jsonString);
-
-        //TextView sniffResult = (TextView) findViewById(R.id.textView);
-        //sniffResult.setText(jsonString);
-
-        new PostAsync().execute(jsonString);
-    }
-}
-
-class PostAsync extends AsyncTask<String, Void, Boolean> {
-
-    @Override
-    protected void onPreExecute () {
-
     }
 
-    @Override
-    protected Boolean doInBackground(String... params) {
-        return postData(params[0]);
-    }
+    class PostAsync extends AsyncTask<String, Void, Boolean> {
 
-    @Override
-    protected void onPostExecute(Boolean result) {
-        System.out.println(result);
-    }
-
-    public Boolean postData(String jsonString) {
-        try {
-            HttpClient httpClient = new DefaultHttpClient();
-            HttpPost httpPost = new HttpPost("http://campus.pillowsky.org/submit");
-            StringEntity se = new StringEntity(jsonString);
-            se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
-            httpPost.setEntity(se);
-
+        @Override
+        protected Boolean doInBackground(String[] params) {
             try {
-                HttpResponse response = httpClient.execute(httpPost);
-                System.out.println(response);
+                HttpClient httpClient = new DefaultHttpClient();
+                HttpPost httpPost = new HttpPost("http://campus.pillowsky.org/submit");
+                StringEntity se = new StringEntity(params[0]);
+                se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
+                httpPost.setEntity(se);
 
-                return true;
-            } catch (ClientProtocolException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
+                try {
+                    httpClient.execute(httpPost);
+                    return true;
+                } catch (ClientProtocolException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } catch (Exception e) {
                 e.printStackTrace();
             }
-        } catch (Exception e) {
-            e.printStackTrace();
+
+            return false;
         }
 
-        return false;
-    }
+        @Override
+        protected void onPostExecute(Boolean result) {
+            unregisterReceiver(wifiReciever);
 
+            if(result == true){
+                Toast.makeText(getApplicationContext(), "Submit Success", Toast.LENGTH_SHORT).show();
+            } else{
+                Toast.makeText(getApplicationContext(), "Submit Error", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
 }
