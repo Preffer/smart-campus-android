@@ -10,12 +10,16 @@ import android.content.IntentFilter;
 import android.net.wifi.ScanResult;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.os.Build;
+import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import android.net.wifi.WifiInfo;
@@ -38,6 +42,8 @@ import org.json.JSONObject;
 public class Main extends Activity {
     private WifiScanReceiver wifiReciever;
     private IntentFilter scanCompleteFilter;
+    float cursorX;
+    float cursorY;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,25 +81,52 @@ public class Main extends Activity {
     /**
      * A placeholder fragment containing a simple view.
      */
-    public static class PlaceholderFragment extends Fragment {
+    public class PlaceholderFragment extends Fragment {
 
         public PlaceholderFragment() {
         }
 
         @Override
-        public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                Bundle savedInstanceState) {
+        public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
             View rootView = inflater.inflate(R.layout.fragment_main, container, false);
+            ImageView bgView = (ImageView) rootView.findViewById(R.id.imageView);
+            DisplayMetrics metrics = new DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getMetrics(metrics);
+            int imgW = 1270;
+            int imgH = 480;
+            final int windowW = metrics.widthPixels;
+            final int windowH = metrics.heightPixels;
+            bgView.getLayoutParams().width = windowH * imgW / imgH;
+            bgView.getLayoutParams().height = windowH;
+            bgView.setOnTouchListener(new View.OnTouchListener() {
+                float startX, startY;
+                public boolean onTouch(View v, MotionEvent event) {
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startX = event.getRawX() - v.getX();
+                            startY = event.getRawY() - v.getY();
+                            break;
+                        case MotionEvent.ACTION_MOVE:
+                            v.setX(event.getRawX() - startX);
+                            v.setY(event.getRawY() - startY);
+                            break;
+                        case MotionEvent.ACTION_UP:
+                            cursorX = windowW / 2 - (event.getRawX() - startX);
+                            cursorY = windowH / 2 - (event.getRawY() - startY);
+                            break;
+                    }
+                    return true;
+                }
+            });
             return rootView;
         }
     }
 
     public void makeSniff(View view) {
-        registerReceiver(wifiReciever, scanCompleteFilter);
-
         Toast.makeText(getApplicationContext(), "Start scan...", Toast.LENGTH_SHORT).show();
         WifiManager manager = (WifiManager) this.getSystemService(Context.WIFI_SERVICE);
         manager.startScan();
+        registerReceiver(wifiReciever, scanCompleteFilter);
     }
 
     class WifiScanReceiver extends BroadcastReceiver {
@@ -121,6 +154,11 @@ public class Main extends Activity {
             try{
                 json.put("scan", scan);
                 json.put("timestamp", System.currentTimeMillis() / 1000);
+                json.put("x", cursorX);
+                json.put("y", cursorY);
+                EditText zText = (EditText) findViewById(R.id.editText);
+                json.put("z", zText.getText());
+
             } catch (JSONException e) {
                 e.printStackTrace();
             }

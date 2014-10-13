@@ -6,5 +6,6 @@
     <string name="action_settings">Settings</string>
     <string name="sniff">Sniff!</string>
     <string name="sniffresult">Sniff Result</string>
+    <string name="background">Background</string>
 
 </resources>
