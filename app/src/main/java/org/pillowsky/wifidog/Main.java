@@ -35,6 +35,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.protocol.HTTP;
+import org.apache.http.util.EntityUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -118,6 +119,7 @@ public class Main extends Activity {
                     return true;
                 }
             });
+
             return rootView;
         }
     }
@@ -132,7 +134,8 @@ public class Main extends Activity {
     class WifiScanReceiver extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            Toast.makeText(getApplicationContext(), "Scan finished", Toast.LENGTH_SHORT).show();
+            unregisterReceiver(wifiReciever);
+            //Toast.makeText(getApplicationContext(), "Scan finished", Toast.LENGTH_SHORT).show();
             WifiManager manager = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
             JSONObject json = new JSONObject();
             JSONArray scan = new JSONArray();
@@ -157,8 +160,9 @@ public class Main extends Activity {
                 json.put("x", cursorX);
                 json.put("y", cursorY);
                 EditText zText = (EditText) findViewById(R.id.editText);
-                json.put("z", zText.getText());
-
+                json.put("z", Float.parseFloat(zText.getText().toString()));
+                String toastString = "X = " + cursorX + " Y = " + cursorY + " Z = " +  Float.parseFloat(zText.getText().toString());
+                Toast.makeText(getApplicationContext(), toastString, Toast.LENGTH_SHORT).show();
             } catch (JSONException e) {
                 e.printStackTrace();
             }
@@ -170,20 +174,20 @@ public class Main extends Activity {
         }
     }
 
-    class PostAsync extends AsyncTask<String, Void, Boolean> {
+    class PostAsync extends AsyncTask<String, Void, String> {
 
         @Override
-        protected Boolean doInBackground(String[] params) {
+        protected String doInBackground(String[] params) {
             try {
                 HttpClient httpClient = new DefaultHttpClient();
-                HttpPost httpPost = new HttpPost("http://campus.pillowsky.org/submit");
+                HttpPost httpPost = new HttpPost("http://campus.pillowsky.org/query");
                 StringEntity se = new StringEntity(params[0]);
                 se.setContentType(new BasicHeader(HTTP.CONTENT_TYPE, "application/json"));
                 httpPost.setEntity(se);
 
                 try {
-                    httpClient.execute(httpPost);
-                    return true;
+                    HttpResponse response = httpClient.execute(httpPost);
+                    return EntityUtils.toString(response.getEntity());
                 } catch (ClientProtocolException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
@@ -193,18 +197,12 @@ public class Main extends Activity {
                 e.printStackTrace();
             }
 
-            return false;
+            return "";
         }
 
         @Override
-        protected void onPostExecute(Boolean result) {
-            unregisterReceiver(wifiReciever);
-
-            if(result == true){
-                Toast.makeText(getApplicationContext(), "Submit Success", Toast.LENGTH_SHORT).show();
-            } else{
-                Toast.makeText(getApplicationContext(), "Submit Error", Toast.LENGTH_SHORT).show();
-            }
+        protected void onPostExecute(String result) {
+            Toast.makeText(getApplicationContext(), result, Toast.LENGTH_SHORT).show();
         }
     }
 }
